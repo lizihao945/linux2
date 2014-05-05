@@ -62,7 +62,7 @@ void scheduler()
 		break;
 	default:
 		break;
-	}
+	} 
  	#ifdef DEBUG
  		printf("Select which job to run next!\n");
  	#endif
