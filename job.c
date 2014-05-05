@@ -11,7 +11,7 @@
 #include "job.h"
 
 //#define DEBUG
-#define DEBUG3
+#define DEBUG4
 
 int jobid=0;
 int siginfo=1;
@@ -43,18 +43,18 @@ void scheduler()
 
 	#ifdef DEBUG1
 		printf("before updateall():\n");
-		do_stat(cmd);
+		do_stat();
 	#endif
 	updateall();
 	#ifdef DEBUG1
 		printf("after updateall():\n");
-		do_stat(cmd);
+		do_stat();
 	#endif
 
 
 	#ifdef DEBUG2
 		printf("before ENQ, DEQ, STAT:\n");
-		do_stat(cmd);
+		do_stat();
 	#endif
 	switch(cmd.type){
 	case ENQ:
@@ -73,7 +73,7 @@ void scheduler()
 		#ifdef DEBUG
 			printf("Execute stat!\n");
 		#endif
-		do_stat(cmd);
+		do_stat();
 		break;
 	default:
 		break;
@@ -81,7 +81,7 @@ void scheduler()
 
 	#ifdef DEBUG2
 		printf("after ENQ, DEQ, STAT:\n");
-		do_stat(cmd);
+		do_stat();
 	#endif
 
  	#ifdef DEBUG
@@ -152,6 +152,10 @@ void jobswitch()
 	struct waitqueue *p;
 	int i;
 
+	#ifdef DEBUG4
+		printf("before jobswitch():\n");
+		do_stat();
+	#endif
 	if(current && current->job->state == DONE){ /* 当前作业完成 */
 		/* 作业完成，删除它 */
 		for(i = 0;(current->job->cmdarg)[i] != NULL; i++){
@@ -166,20 +170,24 @@ void jobswitch()
 		current = NULL;
 	}
 
-	if(next == NULL && current == NULL) /* 没有作业要运行 */
-
+	if(next == NULL && current == NULL) {/* 没有作业要运行 */
+		#ifdef DEBUG4
+			printf("No job to run!\n");
+		#endif
 		return;
-	else if (next != NULL && current == NULL){ /* 开始新的作业 */
-
+	}	else if (next != NULL && current == NULL){ /* 开始新的作业 */
 		printf("begin start new job\n");
 		current = next;
 		next = NULL;
 		current->job->state = RUNNING;
 		kill(current->job->pid,SIGCONT);
+		#ifdef DEBUG4
+			printf("after jobswitch() starts a new job:\n");
+			do_stat();
+		#endif
 		return;
 	}
 	else if (next != NULL && current != NULL){ /* 切换作业 */
-
 		printf("switch to Pid: %d\n",next->job->pid);
 		kill(current->job->pid,SIGSTOP);
 		current->job->curpri = current->job->defpri;
@@ -198,8 +206,17 @@ void jobswitch()
 		current->job->state = RUNNING;
 		current->job->wait_time = 0;
 		kill(current->job->pid,SIGCONT);
+
+		#ifdef DEBUG4
+			printf("after jobswitch() switches the job:\n");
+			do_stat();
+		#endif
 		return;
 	}else{ /* next == NULL且current != NULL，不切换 */
+		#ifdef DEBUG4
+			printf("after jobswitch() doesn't switch:\n");
+			do_stat();
+		#endif
 		return;
 	}
 }
@@ -382,8 +399,7 @@ void show_job_info(struct jobinfo *job) {
 		timebuf);
 }
 
-void do_stat(struct jobcmd statcmd)
-{
+void do_stat() {
 	struct waitqueue *p;
 	char timebuf[BUFLEN];
 	/*
