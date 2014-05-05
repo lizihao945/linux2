@@ -5,7 +5,7 @@
 #include <sys/ipc.h>
 #include <fcntl.h>
 #include "job.h"
-#define DEBUG
+#define DEBUGENQ
 /* 
  * 命令语法格式
  *     enq [-p num] e_file args
@@ -65,12 +65,12 @@ int main(int argc,char *argv[])
 		argv++;
 	}
 
-    #ifdef DEBUG
-		printf("enqcmd cmdtype\t%d\n"
-			"enqcmd owner\t%d\n"
-			"enqcmd defpri\t%d\n"
-			"enqcmd data\t%s\n",
-			enqcmd.type,enqcmd.owner,enqcmd.defpri,enqcmd.data);
+    #ifdef DEBUGENQ
+			printf("enqcmd cmdtype\t%d (-1 meas ENQ, -2 means DEQ, -3 means STAT)\n"
+				"enqcmd owner\t%d\n"
+				"enqcmd defpri\t%d\n"
+				"enqcmd data\t%s\n",
+				enqcmd.type,enqcmd.owner,enqcmd.defpri,enqcmd.data);
 
     #endif 
 
