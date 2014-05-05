@@ -7,7 +7,7 @@
 #include "job.h"
 
 /* 
- * 命令语法格式
+ * 鍛戒护璇硶鏍煎紡
  *     stat
  */
 void usage()
