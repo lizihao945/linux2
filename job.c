@@ -136,7 +136,7 @@ struct waitqueue* jobselect()
 			}
 			selectprev->next = select->next;
 			if (select == selectprev)
-				head = NULL;
+				head = NULL; 
 	}
 	#ifdef DEBUG3
 		if (select) {
