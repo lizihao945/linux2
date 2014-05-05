@@ -69,5 +69,7 @@ void error_sys(const char *fmt,...);
 void error_msg(const char *fmt,...);
 void error_quit(const char *fmt,...);
 
+void show_job_info(struct jobinfo *job);
+
 #endif
 

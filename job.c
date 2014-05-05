@@ -11,7 +11,7 @@
 #include "job.h"
 
 //#define DEBUG
-#define DEBUG1
+#define DEBUG3
 
 int jobid=0;
 int siginfo=1;
@@ -51,6 +51,11 @@ void scheduler()
 		do_stat(cmd);
 	#endif
 
+
+	#ifdef DEBUG2
+		printf("before ENQ, DEQ, STAT:\n");
+		do_stat(cmd);
+	#endif
 	switch(cmd.type){
 	case ENQ:
 		#ifdef DEBUG
@@ -73,6 +78,12 @@ void scheduler()
 	default:
 		break;
 	} 
+
+	#ifdef DEBUG2
+		printf("after ENQ, DEQ, STAT:\n");
+		do_stat(cmd);
+	#endif
+
  	#ifdef DEBUG
  		printf("Select which job to run next!\n");
  	#endif
@@ -127,6 +138,12 @@ struct waitqueue* jobselect()
 			if (select == selectprev)
 				head = NULL;
 	}
+	#ifdef DEBUG3
+		if (select) {
+			printf("Selected job:\n");
+			show_job_info(select->job);
+		}
+	#endif
 	return select;
 }
 
@@ -348,6 +365,21 @@ void do_deq(struct jobcmd deqcmd)
 			select=NULL;
 		}
 	}
+}
+
+void show_job_info(struct jobinfo *job) {
+	char timebuf[BUFLEN];
+	strcpy(timebuf,ctime(&(job->create_time)));
+	timebuf[strlen(timebuf)-1]='\0';
+
+	printf("JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\t");
+	printf("%d\t%d\t%d\t%d\t%d\t%s\t\n",
+		job->jid,
+		job->pid,
+		job->ownerid,
+		job->run_time,
+		job->wait_time,
+		timebuf);
 }
 
 void do_stat(struct jobcmd statcmd)
