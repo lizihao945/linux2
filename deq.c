@@ -5,7 +5,7 @@
 #include <sys/ipc.h>
 #include <fcntl.h>
 #include "job.h"
-
+#define DEBUG
 /* 
  * 命令语法格式
  *     deq jid
@@ -33,6 +33,12 @@ int main(int argc,char *argv[])
 	deqcmd.argnum=1;
 
 	strcpy(deqcmd.data,*++argv);
+	#ifdef DEBUG
+			printf("deqcmd type\t%d (-1 meas ENQ, -2 means DEQ, -3 means STAT)\n"
+				"deqcmd owner\t%d\n"
+				"deqcmd data\t%s\n",
+				deqcmd.type,deqcmd.owner,deqcmd.data);
+	#endif
 	printf("jid %s\n",deqcmd.data);
 
 	if((fd=open("/tmp/server",O_WRONLY))<0)
