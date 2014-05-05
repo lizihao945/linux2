@@ -11,7 +11,7 @@
 #include "job.h"
 
 //#define DEBUG
-#define DEBUG4
+#define DEBUG5
 
 int jobid=0;
 int siginfo=1;
@@ -245,6 +245,9 @@ case SIGCHLD: /* 子进程结束时传送给父进程的信号 */
 	}else if (WIFSTOPPED(status)){
 		printf("child stopped, signal number = %d\n",WSTOPSIG(status));
 	}
+	#ifdef DEBUG5
+		do_stat();
+	#endif
 	return;
 	default:
 		return;
