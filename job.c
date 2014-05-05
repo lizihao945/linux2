@@ -11,6 +11,7 @@
 #include "job.h"
 
 //#define DEBUG
+#define DEBUG1
 
 int jobid=0;
 int siginfo=1;
@@ -39,7 +40,16 @@ void scheduler()
 	#ifdef DEBUG
 		printf("Update jobs in wait queue!\n");
 	#endif
+
+	#ifdef DEBUG1
+		printf("before updateall():\n");
+		do_stat(cmd);
+	#endif
 	updateall();
+	#ifdef DEBUG1
+		printf("after updateall():\n");
+		do_stat(cmd);
+	#endif
 
 	switch(cmd.type){
 	case ENQ:
