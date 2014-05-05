@@ -10,6 +10,8 @@
 #include <time.h>
 #include "job.h"
 
+#define DEBUG
+
 int jobid=0;
 int siginfo=1;
 int fifo;
@@ -371,6 +373,9 @@ int main()
 	struct stat statbuf;
 	struct sigaction newact,oldact1,oldact2;
 
+	#ifdef DEBUG
+		printf("DEBUG is open!\n");
+	#endif
 	if(stat("/tmp/server",&statbuf)==0){
 		/* 如果FIFO文件存在,删掉 */
 		if(remove("/tmp/server")<0)
