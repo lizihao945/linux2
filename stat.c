@@ -5,7 +5,7 @@
 #include <sys/ipc.h>
 #include <fcntl.h>
 #include "job.h"
-#define DEBUG
+//#define DEBUG
 /* 
  * 命令语法格式
  *     stat
@@ -18,7 +18,8 @@ void usage()
 int main(int argc,char *argv[])
 {
 	struct jobcmd statcmd;
-	int fd;
+	int fd, fifo;
+	char fifobuf[FIFOLEN];
 
 	if(argc!=1)
 	{
@@ -42,6 +43,12 @@ int main(int argc,char *argv[])
 	if(write(fd,&statcmd,DATALEN)<0)
 		error_sys("stat write failed");
 
+	if((fifo=open("/tmp/stat", O_RDONLY))<0)
+		error_sys("stat read fifo failed");
+
+	if(read(fifo, fifobuf, FIFOLEN)<0)
+		error_sys("stat write(back) failed");
+	printf("%s\n", fifobuf);
 	close(fd);
 	return 0;
 }

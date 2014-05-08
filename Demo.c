@@ -12,7 +12,7 @@ void main()
      time(&timerc);
      if((timerc-timer)>=1)//每过1秒打印
      {
-       printf("程序经过%d秒\n",count++);
+       //printf("程序经过%d秒\n",count++);
        timer=timerc;
      }
   }

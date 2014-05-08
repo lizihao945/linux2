@@ -30,69 +30,75 @@ void scheduler()
 	bzero(&cmd,DATALEN);
 	if((count=read(fifo,&cmd,DATALEN))<0)
 		error_sys("read fifo failed");
-#ifdef DEBUG
+
+	// debug info
+	#ifdef DEBUG
 		printf("Reading whether other process send command!\n");
 		if (count)
 			printf("cmd cmdtype\t%d\ncmd defpri\t%d\ncmd data\t%s\n", cmd.type, cmd.defpri, cmd.data);
-#endif
-
-	/* 更新等待队列中的作业 */
+	#endif
 	#ifdef DEBUG
 		printf("Update jobs in wait queue!\n");
 	#endif
-
 	#ifdef DEBUG1
 		printf("before updateall():\n");
 		do_stat();
 	#endif
+
+	/* 更新等待队列中的作业 */
 	updateall();
+
 	#ifdef DEBUG1
 		printf("after updateall():\n");
 		do_stat();
 	#endif
-
-
 	#ifdef DEBUG2
 		printf("before ENQ, DEQ, STAT:\n");
 		do_stat();
 	#endif
+	// end of debug info
+
 	switch(cmd.type){
-	case ENQ:
-		#ifdef DEBUG
-			printf("Execute enq!\n");
-		#endif
-		do_enq(newjob,cmd);
-		break;
-	case DEQ:
-		#ifdef DEBUG
-			printf("Execute deq!\n");
-		#endif
-		do_deq(cmd);
-		break;
-	case STAT:
-		#ifdef DEBUG
-			printf("Execute stat!\n");
-		#endif
-		do_stat();
-		break;
-	default:
-		break;
+		case ENQ:
+			#ifdef DEBUG
+				printf("Execute enq!\n");
+			#endif
+			do_enq(newjob,cmd);
+			break;
+		case DEQ:
+			#ifdef DEBUG
+				printf("Execute deq!\n");
+			#endif
+			do_deq(cmd);
+			break;
+		case STAT:
+			#ifdef DEBUG
+				printf("Execute stat!\n");
+			#endif
+			do_stat_to_fifo();
+			break;
+		default:
+			break;
 	} 
 
+	// debug info
 	#ifdef DEBUG2
 		printf("after ENQ, DEQ, STAT:\n");
 		do_stat();
 	#endif
-
  	#ifdef DEBUG
  		printf("Select which job to run next!\n");
  	#endif
+ 	// end of debug info
+
 	/* 选择高优先级作业 */
 	next=jobselect();
-	/* 作业切换 */
+
 	#ifdef DEBUG
 		printf("Switch to the next job!\n");
 	#endif
+
+	/* 作业切换 */
 	jobswitch();
 }
 
@@ -188,7 +194,9 @@ void jobswitch()
 		return;
 	}
 	else if (next != NULL && current != NULL){ /* 切换作业 */
-		printf("switch to Pid: %d\n",next->job->pid);
+		#ifdef DEBUG
+			printf("switch to Pid: %d\n",next->job->pid);
+		#endif
 		kill(current->job->pid,SIGSTOP);
 		current->job->curpri = current->job->defpri;
 		current->job->wait_time = 0;
@@ -227,30 +235,30 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 	int ret;
 
 	switch (sig) {
-case SIGVTALRM: /* 到达计时器所设置的计时间隔 */
-	#ifdef DEBUG
-		printf("SIGVTALRM received!\n");
-	#endif
-	scheduler();
-	return;
-case SIGCHLD: /* 子进程结束时传送给父进程的信号 */
-	ret = waitpid(-1,&status,WNOHANG);
-	if (ret == 0)
-		return;
-	if(WIFEXITED(status)){
-		current->job->state = DONE;
-		printf("normal termation, exit status = %d\n",WEXITSTATUS(status));
-	}else if (WIFSIGNALED(status)){
-		printf("abnormal termation, signal number = %d\n",WTERMSIG(status));
-	}else if (WIFSTOPPED(status)){
-		printf("child stopped, signal number = %d\n",WSTOPSIG(status));
-	}
-	#ifdef DEBUG5
-		do_stat();
-	#endif
-	return;
-	default:
-		return;
+		case SIGVTALRM: /* 到达计时器所设置的计时间隔 */
+			#ifdef DEBUG
+				printf("SIGVTALRM received!\n");
+			#endif
+			scheduler();
+			return;
+		case SIGCHLD: /* 子进程结束时传送给父进程的信号 */
+			ret = waitpid(-1,&status,WNOHANG);
+			if (ret == 0)
+				return;
+			if(WIFEXITED(status)){
+				current->job->state = DONE;
+				printf("normal termation, exit status = %d\n",WEXITSTATUS(status));
+			}else if (WIFSIGNALED(status)){
+				printf("abnormal termation, signal number = %d\n",WTERMSIG(status));
+			}else if (WIFSTOPPED(status)){
+				printf("child stopped, signal number = %d\n",WSTOPSIG(status));
+			}
+			#ifdef DEBUG5
+				do_stat();
+			#endif
+			return;
+		default:
+			return;
 	}
 }
 
@@ -402,6 +410,53 @@ void show_job_info(struct jobinfo *job) {
 		timebuf);
 }
 
+void do_stat_to_fifo() {
+	struct waitqueue *p;
+	char timebuf[BUFLEN];
+	char fifobuf[FIFOLEN];
+	char tmp[BUFLEN];
+	int fifo;
+	int job_conut = 0;
+
+	sprintf(fifobuf, "JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\n");
+	if(current){
+		strcpy(timebuf,ctime(&(current->job->create_time)));
+		timebuf[strlen(timebuf)-1]='\0';
+		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+			current->job->jid,
+			current->job->pid,
+			current->job->ownerid,
+			current->job->run_time,
+			current->job->wait_time,
+			timebuf,"RUNNING");
+		strcat(fifobuf, tmp);
+		job_conut++;
+	}
+
+	for(p=head;p!=NULL;p=p->next){
+		strcpy(timebuf,ctime(&(p->job->create_time)));
+		timebuf[strlen(timebuf)-1]='\0';
+		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+			p->job->jid,
+			p->job->pid,
+			p->job->ownerid,
+			p->job->run_time,
+			p->job->wait_time,
+			timebuf,
+			"READY");
+		strcat(fifobuf, tmp);
+		job_conut++;
+	}
+	printf("%d\n", job_conut);
+
+	if((fifo=open("/tmp/stat",O_WRONLY))<0)
+		error_sys("open fifo failed");
+	// write() is atomic
+	if(write(fifo, fifobuf, FIFOLEN)<0)
+		error_sys("write fifo failed");
+	close(fifo);
+}
+
 void do_stat() {
 	struct waitqueue *p;
 	char timebuf[BUFLEN];
@@ -455,13 +510,19 @@ int main()
 		printf("DEBUG is open!\n");
 	#endif
 	if(stat("/tmp/server",&statbuf)==0){
-		/* 如果FIFO文件存在,删掉 */
 		if(remove("/tmp/server")<0)
+			error_sys("remove failed");
+	}
+	if(stat("/tmp/stat",&statbuf)==0){
+		if(remove("/tmp/stat")<0)
 			error_sys("remove failed");
 	}
 
 	if(mkfifo("/tmp/server",0666)<0)
 		error_sys("mkfifo failed");
+	if(mkfifo("/tmp/stat",0666)<0)
+		error_sys("mkfifo failed");
+
 	/* 在非阻塞模式下打开FIFO */
 	if((fifo=open("/tmp/server",O_RDONLY|O_NONBLOCK))<0)
 		error_sys("open fifo failed");

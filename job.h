@@ -17,6 +17,8 @@
 #define BUFLEN 100
 #define GLOBALFILE "screendump"
 
+#define FIFOLEN 1000
+
 enum jobstate{
     READY,RUNNING,DONE
 };
@@ -70,6 +72,7 @@ void error_msg(const char *fmt,...);
 void error_quit(const char *fmt,...);
 
 void show_job_info(struct jobinfo *job);
+void do_stat_to_fifo();
 
 #endif
 
