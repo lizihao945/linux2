@@ -1,23 +1,23 @@
-#include <stdio.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #include <string.h>
 #include <signal.h>
+#include <stdio.h>
 #include <fcntl.h>
 #include <time.h>
 #include "job.h"
 
-//#define DEBUG
+#define DEBUG3
 
 int jobid = 0;
 int siginfo = 1;
 int fifo;
 int globalfd;
 
-// second count of queue
+// when count meets zero, timeslice is over
 int mid_count, low_count;
 
 struct waitqueue *head = NULL, *head2 = NULL, *head3 = NULL;
@@ -44,11 +44,6 @@ void scheduler() {
 	if((count = read(fifo, &cmd, DATALEN))<0)
 		error_sys("read fifo failed");
 
-	if (!mid_count)
-		printf("mid\n");
-	if (!low_count)
-		printf("low\n");
-
 	// debug info
 	#ifdef DEBUG
 		printf("Reading whether other process send command!\n");
@@ -71,6 +66,23 @@ void scheduler() {
 		printf("after updateall():\n");
 		do_stat();
 	#endif
+
+ 	#ifdef DEBUG
+ 		printf("Select which job to run next!\n");
+ 	#endif
+
+	/* 选择高优先级作业 */
+	next = jobselect();
+	//printf("%d jobs after jobselect()\n", job_count());
+
+	#ifdef DEBUG
+		printf("Switch to the next job!\n");
+	#endif
+
+	/* 作业切换 */
+	jobswitch();
+	//printf("%d jobs after jobswitch()\n", job_count());
+
 	#ifdef DEBUG2
 		printf("before ENQ, DEQ, STAT:\n");
 		do_stat();
@@ -100,27 +112,10 @@ void scheduler() {
 			break;
 	} 
 
-	// debug info
 	#ifdef DEBUG2
 		printf("after ENQ, DEQ, STAT:\n");
 		do_stat();
 	#endif
- 	#ifdef DEBUG
- 		printf("Select which job to run next!\n");
- 	#endif
- 	// end of debug info
-
-	/* 选择高优先级作业 */
-	next = jobselect();
-	//printf("%d jobs after jobselect()\n", job_count());
-
-	#ifdef DEBUG
-		printf("Switch to the next job!\n");
-	#endif
-
-	/* 作业切换 */
-	jobswitch();
-	//printf("%d jobs after jobswitch()\n", job_count());
 }
 
 int allocjid() {
@@ -145,59 +140,91 @@ void updateall() {
 		current = NULL;
 	}
 
+	// update current
 	if(current) {
-		// if not in low queue
-		
-		current->job->run_time += 1; /* 1 represents 1000ms */
+		current->job->run_time += 1; // represents 1000ms
+
+		// change the place of the job
+		// if the corresponding timeslice is over
+		if (current->job->curpri == 1 ||
+					(current->job->curpri == 2 && !mid_count) ||
+					(current->job->curpri == 3 && !low_count)) {
+			// always add to queue tail
+			current->next = NULL;
+			// if not in low queue, put it downward
+			switch (current->job->curpri) {
+				case 1:
+					current->job->curpri = 2;
+					if (head2) {
+						for (p = head2; p->next != NULL; p = p->next);
+						p->next = current;
+					} else
+						head2 = current;
+					break;
+				case 2:
+					current->job->curpri = 3;
+				case 3:
+					if (head3) {
+						for (p = head3; p->next != NULL; p = p->next);
+						p->next = current;
+					} else
+						head3 = current;
+					break;
+				default:
+					error_sys("wrong priority level");
+			}
+			kill(current->job->pid, SIGSTOP);
+			current->job->wait_time = 0;
+			current->job->state = READY;
+			current = NULL;
+		}
 	}
 
-	/* 更新作业等待时间及优先级 */
-	for(p = head; p != NULL; p = p->next){
-		p->job->wait_time += 1000;
-		/*if(p->job->wait_time >= 5000 && p->job->curpri < 3){
-			p->job->curpri++;
-			p->job->wait_time = 0;
-		}*/
-	}
+	// update wait queue
+	// job waiting longer than 10s should go upward
 	for (p = head2; p != NULL; p = p->next) {
 		p->job->wait_time += 1000;
+		if(p->job->wait_time >= 10000 && p->job->curpri > 1){
+			p->job->curpri--;
+			p->job->wait_time = 0;
+		}	
 	}
 	for (p = head3; p != NULL; p = p->next) {
 		p->job->wait_time += 1000;
+		if(p->job->wait_time >= 10000 && p->job->curpri > 1){
+			p->job->curpri--;
+			p->job->wait_time = 0;
+		}
 	}
 }
 
 struct waitqueue* jobselect() {
-	struct waitqueue *p, *prev, *select, *selectprev;
-	int highest;
+	struct waitqueue *select;
 
-	if(head){
-		// choose the first one
+	// current running in its timeslice
+	if (current)
+		return current;
+
+	// choose the first one
+	// remove the selected job from the waitqueue
+	if (head) {
 		select = head;
-		selectprev = NULL;
-		highest = select->job->curpri;
-		/* 遍历等待队列中的作业，找到优先级最高的作业 */
-		for(p = head->next, prev = NULL; p != NULL; p = p->next) {
-			if(p->job->curpri > highest){
-				select = p;
-				selectprev = prev;
-				highest = p->job->curpri;
-			}
-			prev = p;
-		}
-		// remove the selected job from the waitqueue
-		if (selectprev != NULL)
-			selectprev->next = select->next; // do not free the node
-		else
-			head = head->next;
-		select->next = NULL;
+		head = head->next;
+	} else if (head2) {
+		select = head2;
+		head2 = head2->next;
+	} else if (head3) {
+		select = head3;
+		head3 = head3->next;
 	} else
 		select = NULL;
+
 	#ifdef DEBUG3
 		if (select) {
 			printf("Selected job:\n");
 			show_job_info(select->job);
-		}
+		} else
+			printf("No job selected\n");
 	#endif
 	return select;
 }
@@ -210,53 +237,21 @@ void jobswitch() {
 		do_stat();
 	#endif
 
-	if(next == NULL && current == NULL) {/* 没有作业要运行 */
-		#ifdef DEBUG4
-			printf("No job to run!\n");
-		#endif
+	// current running in its timeslice
+	if (current == next)
 		return;
-	}	else if (next != NULL && current == NULL){ /* 开始新的作业 */
-		printf("begin start new job\n");
-		current = next;
-		next = NULL;
-		current->job->state = RUNNING;
-		kill(current->job->pid, SIGCONT);
-		#ifdef DEBUG4
-			printf("after jobswitch() starts a new job:\n");
-			do_stat();
-		#endif
-		return;
-	}
-	else if (next != NULL && current != NULL){ /* 切换作业 */
+
+	if (next != NULL) {
 		#ifdef DEBUG
 			printf("switch to Pid: %d\n", next->job->pid);
 		#endif
-		kill(current->job->pid, SIGSTOP);
-		current->job->curpri = current->job->defpri;
-		current->job->wait_time = 0;
-		current->job->state = READY;
-
-		/* 放回等待队列 */
-		if(head){
-			for(p = head; p->next != NULL; p = p->next);
-			p->next = current;
-		}else{
-			head = current;
-		}
 		current = next;
 		next = NULL;
 		current->job->state = RUNNING;
-		current->job->wait_time = 0;
 		kill(current->job->pid, SIGCONT);
-
+		return; 
 		#ifdef DEBUG4
 			printf("after jobswitch() switches the job:\n");
-			do_stat();
-		#endif
-		return;
-	}else{ /* next == NULL且current != NULL，不切换 */
-		#ifdef DEBUG4
-			printf("after jobswitch() doesn't switch:\n");
 			do_stat();
 		#endif
 		return;
@@ -434,14 +429,15 @@ void show_job_info(struct jobinfo *job) {
 	strcpy(timebuf, ctime(&(job->create_time)));
 	timebuf[strlen(timebuf)-1] = '\0';
 
-	printf("JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\n");
-	printf("%d\t%d\t%d\t%d\t%d\t%s\t\n", 
+	printf("JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tQUEUE\t\n");
+	printf("%d\t%d\t%d\t%d\t%d\t%s\t%d\n", 
 		job->jid, 
 		job->pid, 
 		job->ownerid, 
 		job->run_time, 
 		job->wait_time, 
-		timebuf);
+		timebuf,
+		job->curpri);
 }
 
 void do_stat_to_fifo() {
@@ -451,31 +447,54 @@ void do_stat_to_fifo() {
 	char tmp[BUFLEN];
 	int fifo;
 
-	sprintf(fifobuf, "JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\n");
+	sprintf(fifobuf, "JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\tQUEUE\n");
 	if(current){
 		strcpy(timebuf, ctime(&(current->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
-		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\n", 
+		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
 			current->job->jid, 
 			current->job->pid, 
 			current->job->ownerid, 
 			current->job->run_time, 
 			current->job->wait_time, 
-			timebuf, "RUNNING");
+			timebuf, "RUNNING", current->job->curpri);
 		strcat(fifobuf, tmp);
 	}
 
 	for(p = head;p!= NULL;p = p->next){
 		strcpy(timebuf, ctime(&(p->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
-		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\n", 
+		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
 			p->job->jid, 
 			p->job->pid, 
 			p->job->ownerid, 
 			p->job->run_time, 
 			p->job->wait_time, 
-			timebuf, 
-			"READY");
+			timebuf, "READY", p->job->curpri);
+		strcat(fifobuf, tmp);
+	}
+	for(p = head2;p!= NULL;p = p->next){
+		strcpy(timebuf, ctime(&(p->job->create_time)));
+		timebuf[strlen(timebuf)-1] = '\0';
+		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
+			p->job->jid, 
+			p->job->pid, 
+			p->job->ownerid, 
+			p->job->run_time, 
+			p->job->wait_time, 
+			timebuf, "READY", p->job->curpri);
+		strcat(fifobuf, tmp);
+	}
+	for(p = head3;p!= NULL;p = p->next){
+		strcpy(timebuf, ctime(&(p->job->create_time)));
+		timebuf[strlen(timebuf)-1] = '\0';
+		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
+			p->job->jid, 
+			p->job->pid, 
+			p->job->ownerid, 
+			p->job->run_time, 
+			p->job->wait_time, 
+			timebuf, "READY", p->job->curpri);
 		strcat(fifobuf, tmp);
 	}
 
