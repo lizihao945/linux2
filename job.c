@@ -112,7 +112,7 @@ void scheduler() {
 
 	/* 选择高优先级作业 */
 	next = jobselect();
-	printf("%d jobs after jobselect()\n", job_count());
+	//printf("%d jobs after jobselect()\n", job_count());
 
 	#ifdef DEBUG
 		printf("Switch to the next job!\n");
@@ -127,12 +127,27 @@ int allocjid() {
 	return ++jobid;
 }
 
-void upgrade_pri() {
+void downgrade_pri() {
 
 }
 
 void updateall() {
 	struct waitqueue *p;
+	int i;
+
+	if(current && current->job->state == DONE){ /* 当前作业完成 */
+		/* 作业完成，删除它 */
+		for(i = 0;(current->job->cmdarg)[i] != NULL; i++){
+			free((current->job->cmdarg)[i]);
+			(current->job->cmdarg)[i] = NULL;
+		}
+		/* 释放空间 */
+		free(current->job->cmdarg);
+		free(current->job);
+		free(current);
+
+		current = NULL;
+	}
 
 	/* 更新作业运行时间 */
 	if(current)
@@ -140,7 +155,6 @@ void updateall() {
 
 	/* 更新作业等待时间及优先级 */
 	for(p = head; p != NULL; p = p->next){
-		printf("%d\n", p->job->jid);
 		p->job->wait_time += 1000;
 		if(p->job->wait_time >= 5000 && p->job->curpri < 3){
 			p->job->curpri++;
@@ -186,25 +200,11 @@ struct waitqueue* jobselect() {
 
 void jobswitch() {
 	struct waitqueue *p;
-	int i;
 
 	#ifdef DEBUG4
 		printf("before jobswitch():\n");
 		do_stat();
 	#endif
-	if(current && current->job->state == DONE){ /* 当前作业完成 */
-		/* 作业完成，删除它 */
-		for(i = 0;(current->job->cmdarg)[i] != NULL; i++){
-			free((current->job->cmdarg)[i]);
-			(current->job->cmdarg)[i] = NULL;
-		}
-		/* 释放空间 */
-		free(current->job->cmdarg);
-		free(current->job);
-		free(current);
-
-		current = NULL;
-	}
 
 	if(next == NULL && current == NULL) {/* 没有作业要运行 */
 		#ifdef DEBUG4
@@ -212,9 +212,7 @@ void jobswitch() {
 		#endif
 		return;
 	}	else if (next != NULL && current == NULL){ /* 开始新的作业 */
-		#ifdef DEBUG
-			printf("begin start new job\n");
-		#endif
+		printf("begin start new job\n");
 		current = next;
 		next = NULL;
 		current->job->state = RUNNING;
@@ -357,17 +355,18 @@ void do_enq(struct jobinfo *newjob, struct jobcmd enqcmd) {
 
 	if(pid == 0){
 		newjob->pid = getpid();
+
 		/*阻塞子进程, 等等执行*/
 		raise(SIGSTOP);
-#ifdef DEBUG
-
-		printf("begin running\n");
-		for(i = 0;arglist[i]!= NULL;i++)
-			printf("arglist %s\n", arglist[i]);
-#endif
+		#ifdef DEBUG
+			printf("begin running\n");
+			for(i = 0;arglist[i]!= NULL;i++)
+				printf("arglist %s\n", arglist[i]);
+		#endif
 
 		/*复制文件描述符到标准输出*/
 		dup2(globalfd, 1);
+
 		/* 执行命令 */
 		if(execv(arglist[0], arglist)<0)
 			printf("exec failed\n");
@@ -431,7 +430,7 @@ void show_job_info(struct jobinfo *job) {
 	strcpy(timebuf, ctime(&(job->create_time)));
 	timebuf[strlen(timebuf)-1] = '\0';
 
-	printf("JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\t");
+	printf("JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\n");
 	printf("%d\t%d\t%d\t%d\t%d\t%s\t\n", 
 		job->jid, 
 		job->pid, 
