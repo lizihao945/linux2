@@ -10,8 +10,7 @@
 #include <time.h>
 #include "job.h"
 
-//#define DEBUG
-#define DEBUG5
+//#define DEBUG3
 
 int jobid=0;
 int siginfo=1;
@@ -21,12 +20,24 @@ int globalfd;
 struct waitqueue *head=NULL;
 struct waitqueue *next=NULL,*current =NULL;
 
+int job_count() {
+	struct waitqueue *p;
+	int rt = 0;
+	if (current)
+		rt++;
+	if (next)
+		rt++;
+	for (p = head; p != NULL; p = p->next)
+		rt++;
+	return rt;
+}
+
 /* 调度程序 */
 void scheduler()
 {
 	struct jobinfo *newjob=NULL;
 	struct jobcmd cmd;
-	int  count = 0;
+	int count = 0;
 	bzero(&cmd,DATALEN);
 	if((count=read(fifo,&cmd,DATALEN))<0)
 		error_sys("read fifo failed");
@@ -47,6 +58,7 @@ void scheduler()
 
 	/* 更新等待队列中的作业 */
 	updateall();
+	printf("%d jobs updated!\n", job_count());
 
 	#ifdef DEBUG1
 		printf("after updateall():\n");
@@ -93,6 +105,7 @@ void scheduler()
 
 	/* 选择高优先级作业 */
 	next=jobselect();
+	printf("%d jobs after jobselect()\n", job_count());
 
 	#ifdef DEBUG
 		printf("Switch to the next job!\n");
@@ -100,6 +113,7 @@ void scheduler()
 
 	/* 作业切换 */
 	jobswitch();
+	printf("%d jobs after jobswitch()\n", job_count());
 }
 
 int allocjid()
@@ -114,6 +128,8 @@ void updateall()
 	/* 更新作业运行时间 */
 	if(current)
 		current->job->run_time += 1; /* 加1代表1000ms */
+	else
+		printf("no current job!\n");
 
 	/* 更新作业等待时间及优先级 */
 	for(p = head; p != NULL; p = p->next){
@@ -140,6 +156,7 @@ struct waitqueue* jobselect()
 				selectprev = prev;
 				highest = p->job->curpri;
 			}
+			// remove the selected job from the waitqueue
 			selectprev->next = select->next;
 			if (select == selectprev)
 				head = NULL; 
@@ -182,7 +199,9 @@ void jobswitch()
 		#endif
 		return;
 	}	else if (next != NULL && current == NULL){ /* 开始新的作业 */
-		printf("begin start new job\n");
+		#ifdef DEBUG
+			printf("begin start new job\n");
+		#endif
 		current = next;
 		next = NULL;
 		current->job->state = RUNNING;
@@ -416,7 +435,6 @@ void do_stat_to_fifo() {
 	char fifobuf[FIFOLEN];
 	char tmp[BUFLEN];
 	int fifo;
-	int job_conut = 0;
 
 	sprintf(fifobuf, "JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\n");
 	if(current){
@@ -430,7 +448,6 @@ void do_stat_to_fifo() {
 			current->job->wait_time,
 			timebuf,"RUNNING");
 		strcat(fifobuf, tmp);
-		job_conut++;
 	}
 
 	for(p=head;p!=NULL;p=p->next){
@@ -445,9 +462,7 @@ void do_stat_to_fifo() {
 			timebuf,
 			"READY");
 		strcat(fifobuf, tmp);
-		job_conut++;
 	}
-	printf("%d\n", job_conut);
 
 	if((fifo=open("/tmp/stat",O_WRONLY))<0)
 		error_sys("open fifo failed");
