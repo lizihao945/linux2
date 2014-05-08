@@ -10,7 +10,7 @@
 #include <time.h>
 #include "job.h"
 
-//#define DEBUG3
+//#define DEBUG
 
 int jobid=0;
 int siginfo=1;
@@ -58,7 +58,7 @@ void scheduler()
 
 	/* 更新等待队列中的作业 */
 	updateall();
-	printf("%d jobs updated!\n", job_count());
+	//printf("%d jobs updated!\n", job_count());
 
 	#ifdef DEBUG1
 		printf("after updateall():\n");
@@ -113,7 +113,7 @@ void scheduler()
 
 	/* 作业切换 */
 	jobswitch();
-	printf("%d jobs after jobswitch()\n", job_count());
+	//printf("%d jobs after jobswitch()\n", job_count());
 }
 
 int allocjid()
@@ -128,11 +128,10 @@ void updateall()
 	/* 更新作业运行时间 */
 	if(current)
 		current->job->run_time += 1; /* 加1代表1000ms */
-	else
-		printf("no current job!\n");
 
 	/* 更新作业等待时间及优先级 */
 	for(p = head; p != NULL; p = p->next){
+		printf("%d\n", p->job->jid);
 		p->job->wait_time += 1000;
 		if(p->job->wait_time >= 5000 && p->job->curpri < 3){
 			p->job->curpri++;
@@ -143,24 +142,31 @@ void updateall()
 
 struct waitqueue* jobselect()
 {
-	struct waitqueue *p,*prev,*select,*selectprev;
-	int highest = -1;
+	struct waitqueue *p, *prev, *select, *selectprev;
+	int highest;
 
-	select = NULL;
-	selectprev = NULL;
 	if(head){
+		// choose the first one
+		select = head;
+		selectprev = NULL;
+		highest = select->job->curpri;
 		/* 遍历等待队列中的作业，找到优先级最高的作业 */
-		for(prev = head, p = head; p != NULL; prev = p,p = p->next)
+		for(p = head->next, prev = NULL; p != NULL; p = p->next) {
 			if(p->job->curpri > highest){
 				select = p;
 				selectprev = prev;
 				highest = p->job->curpri;
 			}
-			// remove the selected job from the waitqueue
-			selectprev->next = select->next;
-			if (select == selectprev)
-				head = NULL; 
-	}
+			prev = p;
+		}
+		// remove the selected job from the waitqueue
+		if (selectprev != NULL)
+			selectprev->next = select->next; // do not free the node
+		else
+			head = head->next;
+		select->next = NULL;
+	} else
+		select = NULL;
 	#ifdef DEBUG3
 		if (select) {
 			printf("Selected job:\n");
