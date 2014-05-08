@@ -127,10 +127,6 @@ int allocjid() {
 	return ++jobid;
 }
 
-void downgrade_pri() {
-
-}
-
 void updateall() {
 	struct waitqueue *p;
 	int i;
@@ -149,17 +145,25 @@ void updateall() {
 		current = NULL;
 	}
 
-	/* 更新作业运行时间 */
-	if(current)
-		current->job->run_time += 1; /* 加1代表1000ms */
+	if(current) {
+		// if not in low queue
+		
+		current->job->run_time += 1; /* 1 represents 1000ms */
+	}
 
 	/* 更新作业等待时间及优先级 */
 	for(p = head; p != NULL; p = p->next){
 		p->job->wait_time += 1000;
-		if(p->job->wait_time >= 5000 && p->job->curpri < 3){
+		/*if(p->job->wait_time >= 5000 && p->job->curpri < 3){
 			p->job->curpri++;
 			p->job->wait_time = 0;
-		}
+		}*/
+	}
+	for (p = head2; p != NULL; p = p->next) {
+		p->job->wait_time += 1000;
+	}
+	for (p = head3; p != NULL; p = p->next) {
+		p->job->wait_time += 1000;
 	}
 }
 
