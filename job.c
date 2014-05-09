@@ -105,6 +105,7 @@ int allocjid() {
 
 void updateall() {
 	struct waitqueue *p;
+	int flag;
 	int i;
 
 	if (current && current->job->state == DONE) { /* 当前作业完成 */
@@ -121,11 +122,42 @@ void updateall() {
 		current = NULL;
 	}
 
+	// update wait queue
+	// job waiting longer than 10s should go upward
+	for (p = head; p != NULL; p = p->next) {
+		p->job->wait_time += 1000;
+		if (p->job->wait_time >= 10000 && p->job->curpri > 1) {
+			p->job->curpri--;
+			p->job->wait_time = 0;
+		}	
+	}
+	for (p = head2; p != NULL; p = p->next) {
+		p->job->wait_time += 1000;
+		if (p->job->wait_time >= 10000 && p->job->curpri > 1) {
+			p->job->curpri--;
+			p->job->wait_time = 0;
+		}	
+	}
+	for (p = head3; p != NULL; p = p->next) {
+		p->job->wait_time += 1000;
+		if (p->job->wait_time >= 10000 && p->job->curpri > 1) {
+			p->job->curpri--;
+			p->job->wait_time = 0;
+		}
+	}
+
 	// update current
 	if (current) {
 		// change the place of the job
 		// if the corresponding timeslice is over
-		if (current->job->timeslice % current->job->curpri == 0) {
+		flag = 0;
+		if (current->job->curpri == 3 && current->job->timeslice == 5)
+			flag = 1;
+		if (current->job->curpri == 2 && current->job->timeslice == 2)
+			flag = 1;
+		if (current->job->curpri == 1 && current->job->timeslice == 1)
+			flag = 1;
+		if (flag) {
 			current->job->timeslice = 0;
 			// always add to queue tail
 			current->next = NULL;
@@ -162,29 +194,6 @@ void updateall() {
 		}
 	}
 
-	// update wait queue
-	// job waiting longer than 10s should go upward
-	for (p = head; p != NULL; p = p->next) {
-		p->job->wait_time += 1000;
-		if (p->job->wait_time >= 10000 && p->job->curpri > 1) {
-			p->job->curpri--;
-			p->job->wait_time = 0;
-		}	
-	}
-	for (p = head2; p != NULL; p = p->next) {
-		p->job->wait_time += 1000;
-		if (p->job->wait_time >= 10000 && p->job->curpri > 1) {
-			p->job->curpri--;
-			p->job->wait_time = 0;
-		}	
-	}
-	for (p = head3; p != NULL; p = p->next) {
-		p->job->wait_time += 1000;
-		if (p->job->wait_time >= 10000 && p->job->curpri > 1) {
-			p->job->curpri--;
-			p->job->wait_time = 0;
-		}
-	}
 }
 
 struct waitqueue* jobselect() {
