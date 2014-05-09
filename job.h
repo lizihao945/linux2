@@ -46,6 +46,7 @@ struct jobinfo{
     int wait_time;        /* 作业在等待队列中等待时间 */
     time_t create_time;   /* 作业创建时间 */
     int run_time;         /* 作业运行时间 */
+    int timeslice;
     enum jobstate state;  /* 作业状态 */
 };
 

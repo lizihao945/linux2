@@ -17,23 +17,8 @@ int siginfo = 1;
 int fifo;
 int globalfd;
 
-// when count meets zero, timeslice is over
-int mid_count, low_count;
-
 struct waitqueue *head = NULL, *head2 = NULL, *head3 = NULL;
 struct waitqueue *next = NULL, *current = NULL;
-
-int job_count() {
-	struct waitqueue *p;
-	int rt = 0;
-	if (current)
-		rt++;
-	if (next)
-		rt++;
-	for (p = head; p != NULL; p = p->next)
-		rt++;
-	return rt;
-}
 
 /* 调度程序 */
 void scheduler() {
@@ -41,7 +26,7 @@ void scheduler() {
 	struct jobcmd cmd;
 	int count = 0;
 	bzero(&cmd, DATALEN);
-	if((count = read(fifo, &cmd, DATALEN))<0)
+	if ((count = read(fifo, &cmd, DATALEN))<0)
 		error_sys("read fifo failed");
 
 	// debug info
@@ -49,10 +34,9 @@ void scheduler() {
 		printf("Reading whether other process send command!\n");
 		if (count)
 			printf("cmd cmdtype\t%d\ncmd defpri\t%d\ncmd data\t%s\n", cmd.type, cmd.defpri, cmd.data);
-	#endif
-	#ifdef DEBUG
 		printf("Update jobs in wait queue!\n");
 	#endif
+
 	#ifdef DEBUG1
 		printf("before updateall():\n");
 		do_stat();
@@ -60,7 +44,6 @@ void scheduler() {
 
 	/* 更新等待队列中的作业 */
 	updateall();
-	//printf("%d jobs updated!\n", job_count());
 
 	#ifdef DEBUG1
 		printf("after updateall():\n");
@@ -73,7 +56,6 @@ void scheduler() {
 
 	/* 选择高优先级作业 */
 	next = jobselect();
-	//printf("%d jobs after jobselect()\n", job_count());
 
 	#ifdef DEBUG
 		printf("Switch to the next job!\n");
@@ -81,7 +63,6 @@ void scheduler() {
 
 	/* 作业切换 */
 	jobswitch();
-	//printf("%d jobs after jobswitch()\n", job_count());
 
 	#ifdef DEBUG2
 		printf("before ENQ, DEQ, STAT:\n");
@@ -89,7 +70,7 @@ void scheduler() {
 	#endif
 	// end of debug info
 
-	switch(cmd.type){
+	switch(cmd.type) {
 		case ENQ:
 			#ifdef DEBUG
 				printf("Execute enq!\n");
@@ -126,9 +107,9 @@ void updateall() {
 	struct waitqueue *p;
 	int i;
 
-	if(current && current->job->state == DONE){ /* 当前作业完成 */
+	if (current && current->job->state == DONE) { /* 当前作业完成 */
 		/* 作业完成，删除它 */
-		for(i = 0;(current->job->cmdarg)[i] != NULL; i++){
+		for(i = 0;(current->job->cmdarg)[i] != NULL; i++) {
 			free((current->job->cmdarg)[i]);
 			(current->job->cmdarg)[i] = NULL;
 		}
@@ -141,14 +122,11 @@ void updateall() {
 	}
 
 	// update current
-	if(current) {
-		current->job->run_time += 1; // represents 1000ms
-
+	if (current) {
 		// change the place of the job
 		// if the corresponding timeslice is over
-		if (current->job->curpri == 1 ||
-					(current->job->curpri == 2 && !mid_count) ||
-					(current->job->curpri == 3 && !low_count)) {
+		if (current->job->timeslice % current->job->curpri == 0) {
+			current->job->timeslice = 0;
 			// always add to queue tail
 			current->next = NULL;
 			// if not in low queue, put it downward
@@ -177,21 +155,32 @@ void updateall() {
 			current->job->wait_time = 0;
 			current->job->state = READY;
 			current = NULL;
+		} else {
+			// update time info
+			current->job->run_time += 1; // represents 1000ms
+			current->job->timeslice += 1;
 		}
 	}
 
 	// update wait queue
 	// job waiting longer than 10s should go upward
+	for (p = head; p != NULL; p = p->next) {
+		p->job->wait_time += 1000;
+		if (p->job->wait_time >= 10000 && p->job->curpri > 1) {
+			p->job->curpri--;
+			p->job->wait_time = 0;
+		}	
+	}
 	for (p = head2; p != NULL; p = p->next) {
 		p->job->wait_time += 1000;
-		if(p->job->wait_time >= 10000 && p->job->curpri > 1){
+		if (p->job->wait_time >= 10000 && p->job->curpri > 1) {
 			p->job->curpri--;
 			p->job->wait_time = 0;
 		}	
 	}
 	for (p = head3; p != NULL; p = p->next) {
 		p->job->wait_time += 1000;
-		if(p->job->wait_time >= 10000 && p->job->curpri > 1){
+		if (p->job->wait_time >= 10000 && p->job->curpri > 1) {
 			p->job->curpri--;
 			p->job->wait_time = 0;
 		}
@@ -248,6 +237,7 @@ void jobswitch() {
 		current = next;
 		next = NULL;
 		current->job->state = RUNNING;
+		current->job->timeslice = 0;
 		kill(current->job->pid, SIGCONT);
 		return; 
 		#ifdef DEBUG4
@@ -267,20 +257,18 @@ void sig_handler(int sig, siginfo_t *info, void *notused) {
 			#ifdef DEBUG
 				printf("SIGVTALRM received!\n");
 			#endif
-			mid_count = (mid_count + 1) % 2;
-			low_count = (low_count + 1) % 5;
 			scheduler();
 			return;
 		case SIGCHLD: /* 子进程结束时传送给父进程的信号 */
 			ret = waitpid(-1, &status, WNOHANG);
 			if (ret == 0)
 				return;
-			if(WIFEXITED(status)){
+			if (WIFEXITED(status)) {
 				current->job->state = DONE;
 				printf("normal termation, exit status = %d\n", WEXITSTATUS(status));
-			}else if (WIFSIGNALED(status)){
+			}else if (WIFSIGNALED(status)) {
 				printf("abnormal termation, signal number = %d\n", WTERMSIG(status));
-			}else if (WIFSTOPPED(status)){
+			}else if (WIFSTOPPED(status)) {
 				printf("child stopped, signal number = %d\n", WSTOPSIG(status));
 			}
 			#ifdef DEBUG5
@@ -295,6 +283,7 @@ void sig_handler(int sig, siginfo_t *info, void *notused) {
 void do_enq(struct jobinfo *newjob, struct jobcmd enqcmd) {
 	struct waitqueue *newnode, *p;
 	int i = 0, pid;
+	int exec_rt_code;
 	char *offset, *argvec, *q;
 	char **arglist;
 	sigset_t zeromask;
@@ -311,12 +300,13 @@ void do_enq(struct jobinfo *newjob, struct jobcmd enqcmd) {
 	newjob->create_time = time(NULL);
 	newjob->wait_time = 0;
 	newjob->run_time = 0;
+	newjob->timeslice = 0;
 	arglist = (char**)malloc(sizeof(char*)*(enqcmd.argnum+1));
 	newjob->cmdarg = arglist;
 	offset = enqcmd.data;
 	argvec = enqcmd.data;
-	while (i < enqcmd.argnum){
-		if(*offset == ':'){
+	while (i < enqcmd.argnum) {
+		if (*offset == ':') {
 			*offset++ = '\0';
 			q = (char*)malloc(offset - argvec);
 			strcpy(q, argvec);
@@ -336,27 +326,19 @@ void do_enq(struct jobinfo *newjob, struct jobcmd enqcmd) {
 
 #endif
 
-	/*向等待队列中增加新的作业*/
 	newnode = (struct waitqueue*)malloc(sizeof(struct waitqueue));
-	newnode->next = NULL;
 	newnode->job = newjob;
+	newnode->next = NULL;
 
-	if(head)
-	{
-		for(p = head;p->next != NULL; p = p->next);
-		p->next = newnode;
-	}else
-		head = newnode;
-
+	// preempty
 	/*为作业创建进程*/
-	if((pid = fork())<0)
+	if ((pid = fork())<0)
 		error_sys("enq fork failed");
 
-	if(pid == 0){
+	if (pid == 0) { // child process
 		newjob->pid = getpid();
 
-		/*阻塞子进程, 等等执行*/
-		raise(SIGSTOP);
+		// raise(SIGSTOP);
 		#ifdef DEBUG
 			printf("begin running\n");
 			for(i = 0;arglist[i]!= NULL;i++)
@@ -367,11 +349,21 @@ void do_enq(struct jobinfo *newjob, struct jobcmd enqcmd) {
 		dup2(globalfd, 1);
 
 		/* 执行命令 */
-		if(execv(arglist[0], arglist)<0)
-			printf("exec failed\n");
-		exit(1);
-	}else{
+		if ((exec_rt_code = execv(arglist[0], arglist))<0)
+			printf("exec failed: %d\n", exec_rt_code);
+		exit(1); // dead code?
+	} else {
 		newjob->pid = pid;
+		// set as a timeslice end flag
+		if (current)
+			current->job->timeslice = 0;
+		updateall();
+		next = newnode;
+		jobswitch();
+		#ifdef DEBUG3
+			printf("New job:\n");
+			show_job_info(current->job);
+		#endif
 	}
 }
 
@@ -385,10 +377,10 @@ void do_deq(struct jobcmd deqcmd) {
 #endif
 
 	/*current jodid == deqid, 终止当前作业*/
-	if (current && current->job->jid == deqid){
+	if (current && current->job->jid == deqid) {
 		printf("teminate current job\n");
 		kill(current->job->pid, SIGKILL);
-		for(i = 0;(current->job->cmdarg)[i]!= NULL;i++){
+		for(i = 0;(current->job->cmdarg)[i]!= NULL;i++) {
 			free((current->job->cmdarg)[i]);
 			(current->job->cmdarg)[i] = NULL;
 		}
@@ -400,19 +392,19 @@ void do_deq(struct jobcmd deqcmd) {
 	else{ /* 或者在等待队列中查找deqid */
 		select = NULL;
 		selectprev = NULL;
-		if(head){
+		if (head) {
 			for(prev = head, p = head;p!= NULL;prev = p, p = p->next)
-				if(p->job->jid == deqid){
+				if (p->job->jid == deqid) {
 					select = p;
 					selectprev = prev;
 					break;
 				}
 				selectprev->next = select->next;
-				if(select == selectprev)
+				if (select == selectprev)
 					head = NULL;
 		}
-		if(select){
-			for(i = 0;(select->job->cmdarg)[i]!= NULL;i++){
+		if (select) {
+			for(i = 0;(select->job->cmdarg)[i]!= NULL;i++) {
 				free((select->job->cmdarg)[i]);
 				(select->job->cmdarg)[i] = NULL;
 			}
@@ -448,7 +440,7 @@ void do_stat_to_fifo() {
 	int fifo;
 
 	sprintf(fifobuf, "JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\tQUEUE\n");
-	if(current){
+	if (current) {
 		strcpy(timebuf, ctime(&(current->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
 		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
@@ -461,7 +453,7 @@ void do_stat_to_fifo() {
 		strcat(fifobuf, tmp);
 	}
 
-	for(p = head;p!= NULL;p = p->next){
+	for(p = head;p!= NULL;p = p->next) {
 		strcpy(timebuf, ctime(&(p->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
 		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
@@ -473,7 +465,7 @@ void do_stat_to_fifo() {
 			timebuf, "READY", p->job->curpri);
 		strcat(fifobuf, tmp);
 	}
-	for(p = head2;p!= NULL;p = p->next){
+	for(p = head2;p!= NULL;p = p->next) {
 		strcpy(timebuf, ctime(&(p->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
 		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
@@ -485,7 +477,7 @@ void do_stat_to_fifo() {
 			timebuf, "READY", p->job->curpri);
 		strcat(fifobuf, tmp);
 	}
-	for(p = head3;p!= NULL;p = p->next){
+	for(p = head3;p!= NULL;p = p->next) {
 		strcpy(timebuf, ctime(&(p->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
 		sprintf(tmp, "%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
@@ -498,10 +490,10 @@ void do_stat_to_fifo() {
 		strcat(fifobuf, tmp);
 	}
 
-	if((fifo = open("/tmp/stat", O_WRONLY))<0)
+	if ((fifo = open("/tmp/stat", O_WRONLY))<0)
 		error_sys("open fifo failed");
 	// write() is atomic
-	if(write(fifo, fifobuf, FIFOLEN)<0)
+	if (write(fifo, fifobuf, FIFOLEN)<0)
 		error_sys("write fifo failed");
 	close(fifo);
 }
@@ -522,7 +514,7 @@ void do_stat() {
 
 	/* 打印信息头部 */
 	printf("JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\n");
-	if(current){
+	if (current) {
 		strcpy(timebuf, ctime(&(current->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
 		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\n", 
@@ -534,7 +526,7 @@ void do_stat() {
 			timebuf, "RUNNING");
 	}
 
-	for(p = head;p!= NULL;p = p->next){
+	for(p = head;p!= NULL;p = p->next) {
 		strcpy(timebuf, ctime(&(p->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
 		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\n", 
@@ -546,6 +538,28 @@ void do_stat() {
 			timebuf, 
 			"READY");
 	}
+	for(p = head2;p!= NULL;p = p->next) {
+		strcpy(timebuf, ctime(&(p->job->create_time)));
+		timebuf[strlen(timebuf)-1] = '\0';
+		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
+			p->job->jid, 
+			p->job->pid, 
+			p->job->ownerid, 
+			p->job->run_time, 
+			p->job->wait_time, 
+			timebuf, "READY", p->job->curpri);
+	}
+	for(p = head3;p!= NULL;p = p->next) {
+		strcpy(timebuf, ctime(&(p->job->create_time)));
+		timebuf[strlen(timebuf)-1] = '\0';
+		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
+			p->job->jid, 
+			p->job->pid, 
+			p->job->ownerid, 
+			p->job->run_time, 
+			p->job->wait_time, 
+			timebuf, "READY", p->job->curpri);
+	}
 }
 
 int main() {
@@ -554,28 +568,25 @@ int main() {
 	struct stat statbuf;
 	struct sigaction newact, oldact1, oldact2;
 
-	mid_count = 0;
-	low_count = 0;
-
 	#ifdef DEBUG
 		printf("DEBUG is open!\n");
 	#endif
-	if(stat("/tmp/server", &statbuf) == 0){
-		if(remove("/tmp/server")<0)
+	if (stat("/tmp/server", &statbuf) == 0) {
+		if (remove("/tmp/server")<0)
 			error_sys("remove failed");
 	}
-	if(stat("/tmp/stat", &statbuf) == 0){
-		if(remove("/tmp/stat")<0)
+	if (stat("/tmp/stat", &statbuf) == 0) {
+		if (remove("/tmp/stat")<0)
 			error_sys("remove failed");
 	}
 
-	if(mkfifo("/tmp/server", 0666)<0)
+	if (mkfifo("/tmp/server", 0666)<0)
 		error_sys("mkfifo failed");
-	if(mkfifo("/tmp/stat", 0666)<0)
+	if (mkfifo("/tmp/stat", 0666)<0)
 		error_sys("mkfifo failed");
 
 	/* 在非阻塞模式下打开FIFO */
-	if((fifo = open("/tmp/server", O_RDONLY|O_NONBLOCK))<0)
+	if ((fifo = open("/tmp/server", O_RDONLY|O_NONBLOCK))<0)
 		error_sys("open fifo failed");
 
 	/* 建立信号处理函数 */
