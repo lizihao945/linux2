@@ -403,6 +403,28 @@ void do_deq(struct jobcmd deqcmd) {
 				if (select == selectprev)
 					head = NULL;
 		}
+		if (head2) {
+			for(prev = head2, p = head2;p!= NULL;prev = p, p = p->next)
+				if (p->job->jid == deqid) {
+					select = p;
+					selectprev = prev;
+					break;
+				}
+				selectprev->next = select->next;
+				if (select == selectprev)
+					head = NULL;
+		}
+		if (head3) {
+			for(prev = head3, p = head3;p!= NULL;prev = p, p = p->next)
+				if (p->job->jid == deqid) {
+					select = p;
+					selectprev = prev;
+					break;
+				}
+				selectprev->next = select->next;
+				if (select == selectprev)
+					head = NULL;
+		}
 		if (select) {
 			for(i = 0;(select->job->cmdarg)[i]!= NULL;i++) {
 				free((select->job->cmdarg)[i]);
