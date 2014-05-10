@@ -547,35 +547,34 @@ void do_stat() {
 	*/
 
 	/* 打印信息头部 */
-	printf("JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\n");
+	printf("JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\t\tQUEUE\n");
 	if (current) {
 		strcpy(timebuf, ctime(&(current->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
-		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\n", 
+		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\t\t%d\n", 
 			current->job->jid, 
 			current->job->pid, 
 			current->job->ownerid, 
 			current->job->run_time, 
 			current->job->wait_time, 
-			timebuf, "RUNNING");
+			timebuf, "RUNNING", current->job->curpri);
 	}
 
 	for(p = head;p!= NULL;p = p->next) {
 		strcpy(timebuf, ctime(&(p->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
-		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\n", 
+		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\t\t%d\n", 
 			p->job->jid, 
 			p->job->pid, 
 			p->job->ownerid, 
 			p->job->run_time, 
 			p->job->wait_time, 
-			timebuf, 
-			"READY");
+			timebuf, "READY", p->job->curpri);
 	}
 	for(p = head2;p!= NULL;p = p->next) {
 		strcpy(timebuf, ctime(&(p->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
-		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
+		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\t\t%d\n", 
 			p->job->jid, 
 			p->job->pid, 
 			p->job->ownerid, 
@@ -586,7 +585,7 @@ void do_stat() {
 	for(p = head3;p!= NULL;p = p->next) {
 		strcpy(timebuf, ctime(&(p->job->create_time)));
 		timebuf[strlen(timebuf)-1] = '\0';
-		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n", 
+		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\t\t%d\n", 
 			p->job->jid, 
 			p->job->pid, 
 			p->job->ownerid, 
