@@ -26,7 +26,7 @@ int main(int argc,char *argv[])
 		usage();
 		return 1;
 	}
-
+ 
 	statcmd.type=STAT;
 	statcmd.defpri=0;
 	statcmd.owner=getuid();
