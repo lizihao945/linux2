@@ -10,7 +10,7 @@
 #include <time.h>
 #include "job.h"
 
-#define DEBUG2
+#define DEBUG3
 
 int jobid = 0;
 int siginfo = 1;
