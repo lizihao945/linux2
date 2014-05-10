@@ -5,7 +5,7 @@
 #include <sys/ipc.h>
 #include <fcntl.h>
 #include "job.h"
-//#define DEBUG
+
 /* 
  * 命令语法格式
  *     stat
