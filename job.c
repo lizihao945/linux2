@@ -10,6 +10,8 @@
 #include <time.h>
 #include "job.h"
 
+#define DEBUG1
+
 int jobid = 0;
 int siginfo = 1;
 int fifo;
