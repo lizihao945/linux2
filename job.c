@@ -10,7 +10,7 @@
 #include <time.h>
 #include "job.h"
 
-#define DEBUG3
+#define DEBUG4
 
 int jobid = 0;
 int siginfo = 1;
@@ -255,9 +255,8 @@ void jobswitch() {
 		current->job->state = RUNNING;
 		current->job->timeslice = 0;
 		kill(current->job->pid, SIGCONT);
-		return; 
 		#ifdef DEBUG4
-			printf("after jobswitch() switches the job:\n");
+			printf("after jobswitch():\n");
 			do_stat();
 		#endif
 		return;
