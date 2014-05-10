@@ -31,10 +31,12 @@ void scheduler() {
 
 	// debug info
 	#ifdef DEBUG
-		printf("Reading whether other process send command!\n");
+		//printf("Reading whether other process send command!\n");
 		if (count)
 			printf("cmd cmdtype\t%d\ncmd defpri\t%d\ncmd data\t%s\n", cmd.type, cmd.defpri, cmd.data);
-		printf("Update jobs in wait queue!\n");
+		else
+			printf("no data read\n");
+		//printf("Update jobs in wait queue!\n");
 	#endif
 
 	#ifdef DEBUG1
@@ -51,14 +53,14 @@ void scheduler() {
 	#endif
 
  	#ifdef DEBUG
- 		printf("Select which job to run next!\n");
+ 		//printf("Select which job to run next!\n");
  	#endif
 
 	/* 选择高优先级作业 */
 	next = jobselect();
 
 	#ifdef DEBUG
-		printf("Switch to the next job!\n");
+		//printf("Switch to the next job!\n");
 	#endif
 
 	/* 作业切换 */
