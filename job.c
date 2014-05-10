@@ -10,7 +10,7 @@
 #include <time.h>
 #include "job.h"
 
-#define DEBUG3
+#define DEBUG
 
 int jobid = 0;
 int siginfo = 1;
@@ -151,11 +151,13 @@ void updateall() {
 		// change the place of the job
 		// if the corresponding timeslice is over
 		flag = 0;
-		if (current->job->curpri == 3 && current->job->timeslice == 5)
+		if (current->job->timeslice == -1)
 			flag = 1;
-		if (current->job->curpri == 2 && current->job->timeslice == 2)
+		else if (current->job->curpri == 3 && current->job->timeslice == 5)
 			flag = 1;
-		if (current->job->curpri == 1 && current->job->timeslice == 1)
+		else if (current->job->curpri == 2 && current->job->timeslice == 2)
+			flag = 1;
+		else if (current->job->curpri == 1 && current->job->timeslice == 1)
 			flag = 1;
 		if (flag) {
 			current->job->timeslice = 0;
@@ -365,7 +367,7 @@ void do_enq(struct jobinfo *newjob, struct jobcmd enqcmd) {
 		newjob->pid = pid;
 		// set as a timeslice end flag
 		if (current)
-			current->job->timeslice = 0;
+			current->job->timeslice = -1;
 		updateall();
 		next = newnode;
 		jobswitch();
