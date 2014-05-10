@@ -10,7 +10,7 @@
 #include <time.h>
 #include "job.h"
 
-#define DEBUG1
+#define DEBUG2
 
 int jobid = 0;
 int siginfo = 1;
@@ -66,8 +66,10 @@ void scheduler() {
 	jobswitch();
 
 	#ifdef DEBUG2
-		printf("before ENQ, DEQ, STAT:\n");
-		do_stat();
+		if (count) {
+			printf("before ENQ, DEQ, STAT:\n");
+			do_stat();
+		}
 	#endif
 	// end of debug info
 
@@ -95,8 +97,10 @@ void scheduler() {
 	} 
 
 	#ifdef DEBUG2
-		printf("after ENQ, DEQ, STAT:\n");
-		do_stat();
+		if (count) {
+			printf("after ENQ, DEQ, STAT:\n");
+			do_stat();
+		}
 	#endif
 }
 
