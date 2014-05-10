@@ -10,7 +10,7 @@
 #include <time.h>
 #include "job.h"
 
-#define DEBUG4
+#define DEBUG5
 
 int jobid = 0;
 int siginfo = 1;
@@ -287,6 +287,7 @@ void sig_handler(int sig, siginfo_t *info, void *notused) {
 				printf("child stopped, signal number = %d\n", WSTOPSIG(status));
 			}
 			#ifdef DEBUG5
+				printf("The running job is finishing.\n");
 				do_stat();
 			#endif
 			return;
